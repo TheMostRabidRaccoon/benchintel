@@ -167,17 +167,25 @@ const ConfidenceBadge = ({ level, label }) => {
 
 const SparkLine = ({ data, years, height = 28 }) => {
   const max = Math.max(...data, 1);
+  const maxCount = Math.max(...data, 1);
   return (
     <div>
       <div className="flex items-end gap-1" style={{ height }}>
-        {data.map((val, i) => (
-          <div
-            key={i}
-            className="bg-blue-500 rounded-sm flex-1 transition-all hover:bg-blue-600"
-            style={{ height: `${(val / max) * 100}%`, minHeight: 2 }}
-            title={`${years?.[i] || i}: ${val} opinions`}
-          />
-        ))}
+        {data.map((val, i) => {
+          const opacity = Math.max(0.3, val / maxCount);
+          return (
+            <div
+              key={i}
+              className="rounded-sm flex-1 transition-all"
+              style={{
+                height: `${(val / max) * 100}%`,
+                minHeight: 2,
+                backgroundColor: `rgba(59, 130, 246, ${opacity})`,
+              }}
+              title={`${years?.[i] || i}: ${val} opinions`}
+            />
+          );
+        })}
       </div>
       {years && (
         <div className="flex justify-between text-xs text-gray-400 mt-1">
@@ -231,10 +239,11 @@ const ReversalHeatmap = ({ data }) => {
         {Object.entries(data.reversalHeatmap).map(([caseType, metrics]) => {
           const { rate, delta, vs_avg, sampleSize } = metrics;
           if (rate === null || rate === undefined) return null;
-          let colorClass = 'bg-green-50 border-green-200 text-green-700';
-          let riskLevel = 'Low';
-          if (rate > 30) { colorClass = 'bg-yellow-50 border-yellow-200 text-yellow-700'; riskLevel = 'Med'; }
-          if (rate > 45) { colorClass = 'bg-red-50 border-red-200 text-red-700'; riskLevel = 'High'; }
+          let colorClass, riskLabel;
+          if (delta <= 0) { colorClass = 'bg-green-50 border-green-200 text-green-700'; riskLabel = 'Below Avg'; }
+          else if (delta <= 10) { colorClass = 'bg-yellow-50 border-yellow-200 text-yellow-700'; riskLabel = 'Slightly Above'; }
+          else if (delta <= 20) { colorClass = 'bg-orange-50 border-orange-200 text-orange-700'; riskLabel = 'Above Avg'; }
+          else { colorClass = 'bg-red-50 border-red-200 text-red-700'; riskLabel = 'Elevated'; }
           const opacity = sampleSize < 10 ? 'opacity-60' : '';
 
           return (
@@ -245,32 +254,215 @@ const ReversalHeatmap = ({ data }) => {
               <div className="text-xs font-medium truncate mb-1">{caseType}</div>
               <div className="text-xl font-bold">{rate}%</div>
               <div className="text-xs opacity-75">
-                {delta > 0 ? '+' : ''}{delta}% vs avg
+                {delta > 0 ? '+' : ''}{delta}% vs avg ({vs_avg}%)
               </div>
               {delta > 10 && <AlertCircle className="w-4 h-4 text-red-500 absolute top-2 right-2" />}
               {sampleSize < 10 && (
                 <span className="absolute bottom-1 right-1 text-xs bg-gray-200 px-1 rounded text-gray-500">n={sampleSize}</span>
               )}
               <div className="absolute invisible group-hover:visible bg-gray-900 text-white text-xs p-2 rounded shadow-lg bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-10 w-48 text-center">
-                {rate > 45 ? 'High Risk: Strengthen procedural arguments' :
-                 rate > 30 ? 'Moderate: Standard prep recommended' :
-                 'Low Risk: Favorable venue for this case type'}
+                {riskLabel === 'Elevated' ? 'Elevated Risk: Strengthen procedural arguments and consider alternative strategies' :
+                 riskLabel === 'Above Avg' ? 'Above Average: Extra preparation recommended for this case type' :
+                 riskLabel === 'Slightly Above' ? 'Slightly Above Baseline: Standard prep with attention to common reversal points' :
+                 'Below Average: Favorable patterns for this case type'}
               </div>
             </div>
           );
         })}
       </div>
-      <p className="text-xs text-gray-400 mt-3">
-        Color indicates reversal risk vs. district baseline. Hover for strategy tips.
+      {/* Heatmap Legend */}
+      <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+        <span className="font-medium">Risk Scale:</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-200"></span> Below Avg</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200"></span> Slightly Above</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-200"></span> Above Avg</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-200"></span> Elevated</span>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">
+        Color indicates reversal risk relative to jurisdiction baseline. Hover for strategy tips.
       </p>
     </div>
   );
 };
 
+const ClientView = ({ data }) => (
+  <div className="bg-gray-50 rounded-xl p-6 space-y-5 print:bg-white print:shadow-none" id="judge-card">
+    {/* Header */}
+    <div className="border-b border-gray-200 pb-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Scale className="w-6 h-6 text-blue-600" />
+            {data.name}
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">{data.court}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-blue-600">BenchIntel</div>
+          <div className="text-xs text-gray-400">Case Overview</div>
+        </div>
+      </div>
+    </div>
+
+    {/* About This Judge */}
+    <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+      <h3 className="font-semibold text-gray-800 text-lg mb-3">About This Judge</h3>
+      <p className="text-gray-700 leading-relaxed">
+        {data.name} sits on the {data.court} and has authored {data.stats.totalOpinions} published opinions
+        over {data.stats.yearsActive} years.{' '}
+        {data.pulse.velocity >= 20
+          ? 'This is a fast-moving judge who handles cases at an above-average pace.'
+          : data.pulse.velocity >= 10
+            ? 'This judge handles cases at a typical pace for this court.'
+            : 'This judge tends to take more time with cases, which can mean more thorough deliberation.'}
+      </p>
+      <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="text-center p-2 bg-gray-50 rounded">
+          <div className="text-xl font-bold text-gray-800">{data.stats.totalOpinions}</div>
+          <div className="text-xs text-gray-500">Decisions</div>
+        </div>
+        <div className="text-center p-2 bg-gray-50 rounded">
+          <div className="text-xl font-bold text-gray-800">{data.stats.yearsActive} yrs</div>
+          <div className="text-xs text-gray-500">Experience</div>
+        </div>
+        <div className="text-center p-2 bg-gray-50 rounded">
+          <div className="text-xl font-bold text-gray-800">{data.pulse.velocity}/yr</div>
+          <div className="text-xs text-gray-500">Cases Handled</div>
+        </div>
+      </div>
+    </div>
+
+    {/* What to Expect: Timeline */}
+    <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+      <h3 className="font-semibold text-gray-800 text-lg mb-3">What to Expect: Timeline</h3>
+      <p className="text-gray-700 leading-relaxed">
+        This judge processes approximately <strong>{data.pulse.velocity} cases per year</strong>.{' '}
+        {data.pulse.trend === 'Increasing'
+          ? 'The caseload has been growing recently, which may affect timing.'
+          : data.pulse.trend === 'Decreasing'
+            ? 'The workload has been lighter recently, which could mean faster attention to your case.'
+            : 'The workload has been steady, so standard timelines should apply.'}
+      </p>
+      <div className={`mt-3 p-3 rounded-lg ${
+        data.pulse.trend === 'Increasing' ? 'bg-yellow-50 text-yellow-800' :
+        data.pulse.trend === 'Decreasing' ? 'bg-green-50 text-green-800' :
+        'bg-blue-50 text-blue-800'
+      }`}>
+        <strong>Bottom line:</strong>{' '}
+        {data.pulse.velocity >= 20
+          ? 'Expect a faster-than-average timeline. Be prepared for things to move quickly.'
+          : data.pulse.velocity >= 10
+            ? 'Expect a typical timeline. Patience is normal here.'
+            : 'This court moves deliberately. Plan for a longer process, which is not unusual.'}
+      </div>
+    </div>
+
+    {/* Realistic Odds */}
+    <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+      <h3 className="font-semibold text-gray-800 text-lg mb-3">Realistic Odds</h3>
+      <p className="text-gray-700 leading-relaxed mb-3">
+        Based on this judge's track record, approximately <strong>{data.outcomes.affirmanceRate}%</strong> of
+        appeals result in the original decision being upheld, while <strong>{data.outcomes.reversalRate}%</strong> result
+        in the decision being overturned or sent back for further review.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="text-center p-3 bg-gray-50 rounded-lg">
+          <div className="text-2xl font-bold text-gray-700">{data.outcomes.affirmanceRate}%</div>
+          <div className="text-xs text-gray-500">Original decision upheld</div>
+        </div>
+        <div className="text-center p-3 bg-gray-50 rounded-lg">
+          <div className="text-2xl font-bold text-gray-700">{data.outcomes.reversalRate}%</div>
+          <div className="text-xs text-gray-500">Decision overturned</div>
+        </div>
+      </div>
+      {Object.keys(data.partyWins || {}).length > 0 && (
+        <div className="mt-3 p-3 bg-gray-50 rounded text-sm text-gray-600">
+          <strong>In cases like yours:</strong>{' '}
+          {(() => {
+            const topType = Object.entries(data.partyWins)[0];
+            if (!topType) return '';
+            const [caseType, sides] = topType;
+            const sideTotal = Object.values(sides).reduce((a, b) => a + b, 0);
+            const topSide = Object.entries(sides).sort((a, b) => b[1] - a[1])[0];
+            return `In ${caseType} cases, the ${topSide[0].toLowerCase()} prevails about ${Math.round(topSide[1] / sideTotal * 100)}% of the time before this judge.`;
+          })()}
+        </div>
+      )}
+    </div>
+
+    {/* What This Means for Your Case */}
+    <div className="bg-blue-50 rounded-lg p-5 border border-blue-200">
+      <h3 className="font-semibold text-blue-800 text-lg mb-3">What This Means for Your Case</h3>
+      <ul className="space-y-2">
+        {data.filingGuidance?.map((tip, i) => (
+          <li key={i} className="flex items-start gap-2 text-blue-900">
+            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+            <span>{tip}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    {/* Important Considerations */}
+    {data.alerts && data.alerts.length > 0 && (
+      <div className="bg-yellow-50 rounded-lg p-5 border border-yellow-200">
+        <h3 className="font-semibold text-yellow-800 text-lg mb-3">Important Considerations</h3>
+        {data.alerts.map((alert, i) => (
+          <p key={i} className="text-yellow-900 mb-2 leading-relaxed">
+            For <strong>{alert.case_type}</strong> cases, this judge overturns decisions more often than
+            average ({alert.reversal_rate}% vs. the typical rate). This is something your attorney
+            will factor into strategy.
+          </p>
+        ))}
+      </div>
+    )}
+
+    {/* Footer */}
+    <div className="text-center pt-4 border-t border-gray-200">
+      <div className="text-xs text-gray-500">
+        Prepared for client discussion &bull; {new Date().toLocaleDateString()}
+      </div>
+      <div className="text-xs text-gray-400 mt-1">
+        <strong>BenchIntel</strong> &bull; Judicial Intelligence Platform
+      </div>
+    </div>
+  </div>
+);
+
 const JudgeCard = ({ data }) => {
+  const [viewMode, setViewMode] = useState('professional');
   if (!data) return null;
 
+  if (viewMode === 'client') {
+    return (
+      <div>
+        <div className="flex gap-2 mb-4 print:hidden">
+          <button onClick={() => setViewMode('professional')}
+            className="px-3 py-1.5 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+            Professional View
+          </button>
+          <button onClick={() => setViewMode('client')}
+            className="px-3 py-1.5 text-xs rounded-full bg-blue-600 text-white">
+            Client View
+          </button>
+        </div>
+        <ClientView data={data} />
+      </div>
+    );
+  }
+
   return (
+    <div>
+    <div className="flex gap-2 mb-4 print:hidden">
+      <button onClick={() => setViewMode('professional')}
+        className="px-3 py-1.5 text-xs rounded-full bg-blue-600 text-white">
+        Professional View
+      </button>
+      <button onClick={() => setViewMode('client')}
+        className="px-3 py-1.5 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+        Client View
+      </button>
+    </div>
     <div className="bg-gray-50 rounded-xl p-6 space-y-5 print:bg-white print:shadow-none" id="judge-card">
       {/* Header */}
       <div className="border-b border-gray-200 pb-4">
@@ -367,12 +559,20 @@ const JudgeCard = ({ data }) => {
         </h3>
         <div className="grid grid-cols-3 gap-3 mb-3">
           <div className="text-center p-3 bg-green-50 rounded-lg">
-            <div className="text-xl font-bold text-green-600">~{data.outcomes.affirmanceRate}%</div>
-            <div className="text-xs text-green-700">Est. Affirmance Rate</div>
+            <div className="text-xl font-bold text-green-600">
+              {data.outcomes.totalDetected >= 15 ? '' : '~'}{data.outcomes.affirmanceRate}%
+            </div>
+            <div className="text-xs text-green-700">
+              {data.outcomes.totalDetected >= 15 ? 'Affirmance Rate' : 'Est. Affirmance Rate'}
+            </div>
           </div>
           <div className="text-center p-3 bg-red-50 rounded-lg">
-            <div className="text-xl font-bold text-red-500">~{data.outcomes.reversalRate}%</div>
-            <div className="text-xs text-red-600">Est. Reversal Rate</div>
+            <div className="text-xl font-bold text-red-500">
+              {data.outcomes.totalDetected >= 15 ? '' : '~'}{data.outcomes.reversalRate}%
+            </div>
+            <div className="text-xs text-red-600">
+              {data.outcomes.totalDetected >= 15 ? 'Reversal Rate' : 'Est. Reversal Rate'}
+            </div>
           </div>
           <div className="text-center p-3 bg-blue-50 rounded-lg">
             <div className="text-xl font-bold text-blue-600">{data.caseTypes[0]?.percent}%</div>
@@ -384,8 +584,40 @@ const JudgeCard = ({ data }) => {
             <strong>Interpretation:</strong> {data.outcomes.interpretation}
           </div>
         )}
-        <p className="text-xs text-gray-400 mt-2">
-          Note: Outcome estimates based on available opinion data. Full opinion text analysis available in premium tier.
+
+        {/* Party-Side Wins */}
+        {Object.keys(data.partyWins || {}).length > 0 && (
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2">WHO TENDS TO WIN</div>
+            <div className="space-y-2">
+              {Object.entries(data.partyWins).map(([caseType, sides]) => {
+                const sideTotal = Object.values(sides).reduce((a, b) => a + b, 0);
+                if (sideTotal < 3) return null;
+                return (
+                  <div key={caseType} className="flex items-center gap-2 text-sm">
+                    <span className="w-36 text-gray-600 text-xs truncate">{caseType}</span>
+                    <div className="flex-1 flex items-center gap-2">
+                      {Object.entries(sides).sort((a, b) => b[1] - a[1]).map(([side, count]) => (
+                        <span key={side} className={`text-xs px-2 py-0.5 rounded font-medium ${
+                          side === 'Prosecution' || side === 'Respondent'
+                            ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'
+                        }`}>
+                          {side}: {Math.round(count / sideTotal * 100)}%
+                          <span className="text-gray-400 ml-1">({count})</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400 mt-3">
+          {data.outcomes.totalDetected >= 15
+            ? `Based on ${data.outcomes.totalDetected} opinions with detected outcomes (${data.outcomes.detectionRate}% detection rate).`
+            : 'Note: Outcome estimates based on limited data. Full opinion text analysis available in premium tier.'}
         </p>
       </div>
 
@@ -451,6 +683,55 @@ const JudgeCard = ({ data }) => {
         </ul>
       </div>
 
+      {/* Limitations & Methodology */}
+      {data.dataAudit && (
+        <details className="bg-white rounded-lg shadow-sm border border-gray-100">
+          <summary className="p-4 cursor-pointer text-sm font-semibold text-gray-600 flex items-center gap-2 hover:bg-gray-50 list-none">
+            <AlertCircle className="w-4 h-4 text-gray-400" />
+            LIMITATIONS &amp; METHODOLOGY
+            <ChevronDown className="w-4 h-4 ml-auto transition-transform" />
+          </summary>
+          <div className="px-4 pb-4 space-y-3 text-sm text-gray-600">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gray-50 rounded p-2 text-center">
+                <div className="text-lg font-bold text-gray-800">{data.dataAudit.opinionsAnalyzed}</div>
+                <div className="text-xs text-gray-500">Opinions Analyzed</div>
+              </div>
+              <div className="bg-gray-50 rounded p-2 text-center">
+                <div className="text-lg font-bold text-gray-800">{data.dataAudit.opinionsWithOutcomes}</div>
+                <div className="text-xs text-gray-500">Outcomes Detected</div>
+              </div>
+              <div className="bg-gray-50 rounded p-2 text-center">
+                <div className="text-lg font-bold text-gray-800">{data.dataAudit.outcomeDetectionRate}%</div>
+                <div className="text-xs text-gray-500">Detection Rate</div>
+              </div>
+              <div className="bg-gray-50 rounded p-2 text-center">
+                <div className="text-lg font-bold text-gray-800">{data.dataAudit.pagesFetched}</div>
+                <div className="text-xs text-gray-500">Pages Fetched</div>
+              </div>
+            </div>
+            <div>
+              <strong>Coverage:</strong> {data.dataAudit.coveragePeriod}
+            </div>
+            <div>
+              <strong>Data Source:</strong> {data.dataAudit.apiSource}
+            </div>
+            <div>
+              <strong>Known Limitations:</strong>
+              <ul className="list-disc ml-5 mt-1 space-y-1 text-gray-500">
+                {data.dataAudit.limitations?.map((lim, i) => <li key={i}>{lim}</li>)}
+              </ul>
+            </div>
+            <div>
+              <strong>Methodology:</strong>
+              <ul className="list-disc ml-5 mt-1 space-y-1 text-gray-500">
+                {data.dataAudit.methodology?.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
+            </div>
+          </div>
+        </details>
+      )}
+
       {/* Footer */}
       <div className="text-center pt-4 border-t border-gray-200">
         <div className="text-xs text-gray-500">
@@ -460,6 +741,7 @@ const JudgeCard = ({ data }) => {
           Powered by CourtListener API (Free Law Project) &bull; Generated {new Date().toLocaleDateString()}
         </div>
       </div>
+    </div>
     </div>
   );
 };
@@ -513,12 +795,19 @@ function mapApiResponse(api) {
       tip,
     },
     outcomes: {
-      affirmanceRate: api.outcomes?.affirmed || 72,
-      reversalRate: api.outcomes?.reversed || 28,
-      confidence: api.outcomes?.confidence || 2,
-      confidenceLabel: api.outcomes?.confidenceLabel || 'Baseline',
-      interpretation: 'Most appeals fail here—success typically requires clear procedural error or statutory misapplication.',
+      affirmanceRate: api.outcomes?.affirmed ?? 72,
+      reversalRate: api.outcomes?.reversed ?? 28,
+      totalDetected: api.outcomes?.totalDetected || 0,
+      detectionRate: api.outcomes?.detectionRate || 0,
+      byOutcome: api.outcomes?.byOutcome || {},
+      confidence: api.outcomes?.confidence || 1,
+      confidenceLabel: api.outcomes?.confidenceLabel || 'Limited Data',
+      interpretation: api.outcomes?.totalDetected >= 15
+        ? `Based on ${api.outcomes.totalDetected} opinions with detectable outcomes.`
+        : 'Limited outcome data—estimates should be interpreted with caution.',
     },
+    partyWins: api.partyWins || {},
+    dataAudit: api.dataAudit || null,
     notableCases: (api.mostCitedCases || []).map(c => ({
       name: c.name,
       citations: c.citations,
@@ -607,6 +896,170 @@ const PasskeyGate = ({ onAuthenticated }) => {
   );
 };
 
+const CompareView = ({ judges, onRemove }) => {
+  if (judges.length === 0) return null;
+  const cols = judges.length;
+
+  // Collect all unique case types across judges
+  const allCaseTypes = [...new Set(judges.flatMap(j => j.data.caseTypes.map(ct => ct.type)))];
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-6 space-y-5 print:bg-white print:shadow-none" id="compare-view">
+      <div className="border-b border-gray-200 pb-4">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <Scale className="w-5 h-5 text-purple-600" />
+          Judge Comparison
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">Side-by-side analysis for venue selection</p>
+      </div>
+
+      {/* Judge Headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem' }}>
+        {judges.map((j, i) => (
+          <div key={i} className="bg-white rounded-lg p-4 border border-gray-200 text-center">
+            <div className="font-bold text-lg text-gray-900">{j.data.name}</div>
+            <div className="text-xs text-gray-500">{j.data.court}</div>
+            <button onClick={() => onRemove(i)} className="text-xs text-red-400 hover:text-red-600 mt-2 print:hidden">
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Key Metrics Comparison */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+        <h3 className="font-semibold text-gray-700 mb-3 text-sm">KEY METRICS</h3>
+        {[
+          { key: 'totalOpinions', label: 'Published Opinions', icon: BookOpen },
+          { key: 'yearsActive', label: 'Years Active', icon: Clock },
+          { key: 'avgCitations', label: 'Avg Citations', icon: Award },
+          { key: 'velocityPerYear', label: 'Opinions/Year', icon: TrendingUp },
+        ].map(({ key, label, icon: Icon }) => (
+          <div key={key} className="flex items-center py-2 border-b border-gray-50 last:border-0">
+            <div className="w-40 flex items-center gap-2 text-xs text-gray-500">
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem', flex: 1 }}>
+              {judges.map((j, i) => {
+                const val = j.data.stats[key];
+                const vals = judges.map(jj => jj.data.stats[key]);
+                const isMax = val === Math.max(...vals);
+                return (
+                  <div key={i} className={`text-center text-lg font-bold ${isMax ? 'text-blue-600' : 'text-gray-700'}`}>
+                    {val}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Outcome Comparison */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+        <h3 className="font-semibold text-gray-700 mb-3 text-sm">RULING PATTERNS</h3>
+        {['affirmanceRate', 'reversalRate'].map(key => (
+          <div key={key} className="flex items-center py-2 border-b border-gray-50 last:border-0">
+            <div className="w-40 text-xs text-gray-500">
+              {key === 'affirmanceRate' ? 'Affirmance Rate' : 'Reversal Rate'}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem', flex: 1 }}>
+              {judges.map((j, i) => (
+                <div key={i} className={`text-center text-lg font-bold ${
+                  key === 'affirmanceRate' ? 'text-green-600' : 'text-red-500'
+                }`}>
+                  {j.data.outcomes[key]}%
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Case Type Mix */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+        <h3 className="font-semibold text-gray-700 mb-3 text-sm">CASE TYPE MIX</h3>
+        {allCaseTypes.slice(0, 6).map(ct => (
+          <div key={ct} className="flex items-center py-2 border-b border-gray-50 last:border-0">
+            <div className="w-40 text-xs text-gray-600 truncate">{ct}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem', flex: 1 }}>
+              {judges.map((j, i) => {
+                const found = j.data.caseTypes.find(c => c.type === ct);
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-100 rounded-full h-2">
+                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${found?.percent || 0}%` }} />
+                    </div>
+                    <span className="text-xs text-gray-600 w-10 text-right">{found?.percent || 0}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Reversal Risk Comparison */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+        <h3 className="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+          <Flame className="w-4 h-4 text-orange-500" />
+          REVERSAL RISK BANDS
+        </h3>
+        {allCaseTypes.slice(0, 6).map(ct => {
+          const hasData = judges.some(j => j.data.reversalHeatmap[ct]?.rate !== null && j.data.reversalHeatmap[ct]?.rate !== undefined);
+          if (!hasData) return null;
+          return (
+            <div key={ct} className="flex items-center py-2 border-b border-gray-50 last:border-0">
+              <div className="w-40 text-xs text-gray-600 truncate">{ct}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem', flex: 1 }}>
+                {judges.map((j, i) => {
+                  const hm = j.data.reversalHeatmap[ct];
+                  if (!hm || hm.rate === null) return <div key={i} className="text-center text-xs text-gray-400">N/A</div>;
+                  let colorClass;
+                  if (hm.delta <= 0) colorClass = 'text-green-600';
+                  else if (hm.delta <= 10) colorClass = 'text-yellow-600';
+                  else if (hm.delta <= 20) colorClass = 'text-orange-600';
+                  else colorClass = 'text-red-600';
+                  return (
+                    <div key={i} className={`text-center font-bold ${colorClass}`}>
+                      {hm.rate}%
+                      <span className="text-xs font-normal ml-1">({hm.delta > 0 ? '+' : ''}{hm.delta})</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Strategic Signals */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+        <h3 className="font-semibold text-gray-700 mb-3 text-sm">PRIMARY STRATEGIC SIGNALS</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '0.75rem' }}>
+          {judges.map((j, i) => (
+            <div key={i} className="space-y-2">
+              {j.data.strategicSignals?.slice(0, 2).map((sig, si) => (
+                <div key={si} className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
+                  <span className="font-medium text-blue-600">{sig.priority}:</span> {sig.signal}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="text-center pt-4 border-t border-gray-200">
+        <div className="text-xs text-gray-500">
+          <strong>BenchIntel</strong> &bull; Judge Comparison &bull; Generated {new Date().toLocaleDateString()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function BenchIntelApp() {
   const [passkey, setPasskey] = useState(() => sessionStorage.getItem('benchintel_passkey'));
   const [remainingUses, setRemainingUses] = useState(null);
@@ -616,6 +1069,8 @@ export default function BenchIntelApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareJudges, setCompareJudges] = useState([]);
 
   // If no passkey, show the gate
   if (!passkey) {
@@ -645,7 +1100,20 @@ export default function BenchIntelApp() {
 
       if (!res.ok || data.ok === false) {
         setError(data.message || `No results found for "${searchQuery}". Try a different name.`);
-        setJudgeData(null);
+        if (!compareMode) setJudgeData(null);
+      } else if (compareMode) {
+        if (compareJudges.length >= 3) {
+          setError('Maximum 3 judges for comparison.');
+        } else {
+          setCompareJudges(prev => [...prev, {
+            name: searchQuery,
+            court: selectedCourt,
+            data: mapApiResponse(data),
+          }]);
+        }
+        if (data.remainingUses !== undefined) {
+          setRemainingUses(data.remainingUses);
+        }
       } else {
         setJudgeData(mapApiResponse(data));
         if (data.remainingUses !== undefined) {
@@ -690,7 +1158,7 @@ export default function BenchIntelApp() {
                   {remainingUses} searches left
                 </span>
               )}
-              {judgeData && (
+              {(judgeData || compareJudges.length > 0) && (
                 <button
                   onClick={handlePrint}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
@@ -744,9 +1212,30 @@ export default function BenchIntelApp() {
               disabled={isLoading || !searchQuery.trim()}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
             >
-              {isLoading ? 'Analyzing...' : 'Generate'}
+              {isLoading ? 'Analyzing...' : compareMode ? `Add to Compare (${compareJudges.length}/3)` : 'Generate'}
+            </button>
+            <button
+              onClick={() => {
+                setCompareMode(!compareMode);
+                if (compareMode) setCompareJudges([]);
+              }}
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                compareMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {compareMode ? 'Exit Compare' : 'Compare'}
             </button>
           </div>
+          {compareMode && (
+            <div className="mt-2 p-2 bg-purple-50 rounded-lg text-xs text-purple-700 flex items-center gap-2">
+              <Scale className="w-3.5 h-3.5" />
+              <span>
+                <strong>Compare Mode:</strong> Search and add up to 3 judges to compare side-by-side.
+                {compareJudges.length > 0 && ` (${compareJudges.length} added: ${compareJudges.map(j => j.name).join(', ')})`}
+                {compareJudges.length > 0 && ' — Each comparison uses 1 search.'}
+              </span>
+            </div>
+          )}
           <p className="text-xs text-gray-400 mt-2">
             {getCourtDisplayName(selectedCourt)} &bull; Powered by CourtListener (Free Law Project)
           </p>
@@ -768,7 +1257,14 @@ export default function BenchIntelApp() {
           </div>
         )}
 
-        {!isLoading && judgeData && <JudgeCard data={judgeData} />}
+        {!isLoading && compareMode && compareJudges.length > 0 && (
+          <CompareView
+            judges={compareJudges}
+            onRemove={(idx) => setCompareJudges(prev => prev.filter((_, i) => i !== idx))}
+          />
+        )}
+
+        {!isLoading && !compareMode && judgeData && <JudgeCard data={judgeData} />}
 
         {!hasSearched && (
           <div className="text-center py-12 bg-white rounded-xl print:hidden">
